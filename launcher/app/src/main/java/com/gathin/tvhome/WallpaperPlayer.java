@@ -128,6 +128,11 @@ final class WallpaperPlayer {
         }
     }
 
+    /** The picture's view, for LiveScene's light; it is in the root only when a wallpaper shows. */
+    ImageView view() {
+        return image;
+    }
+
     void start() {
         active = true;
         update();

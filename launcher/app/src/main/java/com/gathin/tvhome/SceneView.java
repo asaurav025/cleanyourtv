@@ -1,0 +1,208 @@
+/*
+ * Adapted from Lumen (https://github.com/CS-Ponkoj/lumen-tv-launcher), MIT License,
+ * Copyright (c) 2026 CS-Ponkoj. Used by LiveScene (a theme's live_scene). Its MIT notice: launcher/LUMEN-LICENSE-MIT.txt.
+ */
+package com.gathin.tvhome;
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.RadialGradient;
+import android.graphics.Shader;
+import android.view.View;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+/** Animated weather drawn over the wallpaper: snow, rain, storm, fog, drifting clouds or stars. */
+final class SceneView extends View {
+    /** Several effects in one view: one redraw per frame instead of one per effect. */
+    static final class Stack extends View {
+        private final List<SceneView> layers = new ArrayList<>();
+        Stack(Context c, List<Integer> modes, android.graphics.Bitmap forest) {
+            super(c);
+            setFocusable(false);
+            for (int m : modes) { SceneView v = new SceneView(c, m); v.setForest(forest); v.embedded = true; layers.add(v); }
+        }
+        @Override protected void onSizeChanged(int w, int h, int ow, int oh) {
+            for (SceneView v : layers) v.layout(0, 0, w, h);
+        }
+        // The layers are never attached: drawing them straight into this canvas is the point (one redraw per frame).
+        @android.annotation.SuppressLint("WrongCall")
+        @Override protected void onDraw(Canvas canvas) {
+            for (SceneView v : layers) v.onDraw(canvas);
+            if (!layers.isEmpty()) postInvalidateDelayed(33);
+        }
+    }
+
+    boolean embedded;
+    static final int NONE = 0, SNOW = 1, RAIN = 2, STORM = 3, FOG = 4, CLOUDS = 5, STARS = 6, FIREFLIES = 7,
+            SUNBEAMS = 8, MOTES = 9, BIRDS = 10, LEAVES = 11, PETALS = 12, FLURRIES = 13;
+
+    private final int mode;
+    private final float density;
+    private final Random random = new Random();
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private long last;
+    private boolean seeded;
+
+    private float[] x, y, r, speed, drift, phase;
+    private int[] alpha;
+    private int count;
+    private float flash;          // storm lightning brightness, 0..1
+    private float nextFlashIn = 4f;
+    private Fireflies fireflies;
+    private Ambient ambient;
+    private android.graphics.Bitmap forest;
+
+    void setForest(android.graphics.Bitmap bg) { forest = bg; if (fireflies != null) fireflies.setForest(bg); }
+
+    SceneView(Context c, int mode) {
+        super(c);
+        this.mode = mode;
+        density = c.getResources().getDisplayMetrics().density;
+        setFocusable(false);
+        setClickable(false);
+        count = mode == FLURRIES ? 45 : mode == SNOW ? 150 : mode == RAIN ? 130 : mode == STORM ? 170 : mode == FOG ? 9
+                : mode == CLOUDS ? 6 : mode == STARS ? 70 : 0;
+        x = new float[count]; y = new float[count]; r = new float[count];
+        speed = new float[count]; drift = new float[count]; phase = new float[count];
+        alpha = new int[count];
+    }
+
+    private void seed(int w, int h, int i, boolean anywhere) {
+        float depth = random.nextFloat();
+        x[i] = random.nextFloat() * w;
+        phase[i] = random.nextFloat() * 6.28f;
+        switch (mode) {
+            case SNOW:
+            case FLURRIES:
+                y[i] = anywhere ? random.nextFloat() * h : -10 * density;
+                r[i] = (0.6f + depth * 2.2f) * density;
+                speed[i] = (18 + depth * 55) * density;
+                drift[i] = (6 + random.nextFloat() * 14) * density;
+                alpha[i] = 90 + (int) (depth * 150);
+                break;
+            case RAIN:
+            case STORM:
+                y[i] = anywhere ? random.nextFloat() * h : -30 * density;
+                r[i] = (10 + depth * 18) * density;            // streak length
+                speed[i] = (520 + depth * 520) * density;
+                alpha[i] = 50 + (int) (depth * 110);
+                break;
+            case FOG:
+            case CLOUDS:
+                y[i] = mode == FOG ? h * (0.35f + random.nextFloat() * 0.6f) : h * (0.02f + random.nextFloat() * 0.35f);
+                r[i] = (mode == FOG ? 0.25f + random.nextFloat() * 0.25f : 0.18f + random.nextFloat() * 0.2f) * w;
+                speed[i] = (6 + random.nextFloat() * 10) * density * (random.nextBoolean() ? 1 : -1);
+                alpha[i] = mode == FOG ? 34 + random.nextInt(26) : 26 + random.nextInt(24);
+                break;
+            case STARS:
+                y[i] = random.nextFloat() * random.nextFloat() * h * 0.32f; // mostly near the top
+                r[i] = (0.35f + depth * 0.6f) * density;
+                speed[i] = 0.4f + random.nextFloat() * 1.2f;   // twinkle rate
+                alpha[i] = 70 + (int) (depth * 110);
+                break;
+        }
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        int w = getWidth(), h = getHeight();
+        if (mode >= SUNBEAMS && mode <= PETALS && w > 0 && h > 0) {
+            if (ambient == null) { ambient = new Ambient(mode - SUNBEAMS, density); last = System.nanoTime(); }
+            long t = System.nanoTime();
+            ambient.draw(canvas, w, h, Math.min(0.05f, (t - last) / 1e9f));
+            last = t;
+            if (!embedded) postInvalidateDelayed(33);
+            return;
+        }
+        if (mode == FIREFLIES && w > 0 && h > 0) {
+            if (fireflies == null) { fireflies = new Fireflies(density); fireflies.setForest(forest); last = System.nanoTime(); }
+            long t = System.nanoTime();
+            fireflies.draw(canvas, w, h, Math.min(0.05f, (t - last) / 1e9f));
+            last = t;
+            if (!embedded) postInvalidateDelayed(33); // ~30 fps is smooth for weather and light on the TV
+            return;
+        }
+        if (w == 0 || h == 0 || count == 0) return;
+        if (!seeded) {
+            for (int i = 0; i < count; i++) seed(w, h, i, true);
+            seeded = true;
+            last = System.nanoTime();
+        }
+        long now = System.nanoTime();
+        float dt = Math.min(0.05f, (now - last) / 1e9f);
+        last = now;
+
+        switch (mode) {
+            case SNOW:
+            case FLURRIES:
+                paint.setStyle(Paint.Style.FILL);
+                paint.setShader(null);
+                for (int i = 0; i < count; i++) {
+                    phase[i] += dt * 0.8f;
+                    y[i] += speed[i] * dt;
+                    if (y[i] > h + 10 * density) seed(w, h, i, false);
+                    paint.setColor((alpha[i] << 24) | 0xFFFFFF);
+                    canvas.drawCircle(x[i] + (float) Math.sin(phase[i]) * drift[i], y[i], r[i], paint);
+                }
+                break;
+            case RAIN:
+            case STORM:
+                paint.setShader(null);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(Math.max(1f, density * 1.1f));
+                paint.setStrokeCap(Paint.Cap.BUTT);
+                paint.setAntiAlias(false);              // thin streaks don't need it; much cheaper on TV GPUs
+                float slant = 0.18f;
+                for (int i = 0; i < count; i++) {
+                    y[i] += speed[i] * dt;
+                    x[i] += speed[i] * dt * slant;
+                    if (y[i] > h + 20 * density || x[i] > w + 40 * density) { seed(w, h, i, false); x[i] -= h * slant * 0.5f; }
+                    paint.setColor((alpha[i] << 24) | 0xDDE6F2);
+                    canvas.drawLine(x[i], y[i], x[i] - r[i] * slant, y[i] - r[i], paint);
+                }
+                paint.setAntiAlias(true);
+                if (mode == STORM) {
+                    nextFlashIn -= dt;
+                    if (nextFlashIn <= 0) { flash = 1f; nextFlashIn = 5 + random.nextFloat() * 9; }
+                    if (flash > 0) {
+                        int a = (int) (flash * flash * 150);
+                        canvas.drawColor((a << 24) | 0xE8EEFF);
+                        flash = Math.max(0, flash - dt * (flash > 0.6f ? 2.5f : 1.4f));
+                    }
+                }
+                break;
+            case FOG:
+            case CLOUDS:
+                paint.setStyle(Paint.Style.FILL);
+                for (int i = 0; i < count; i++) {
+                    x[i] += speed[i] * dt;
+                    if (x[i] - r[i] > w) x[i] = -r[i];
+                    if (x[i] + r[i] < 0) x[i] = w + r[i];
+                    int col = mode == FOG ? 0xE6E8EE : 0xF0F2F6;
+                    paint.setShader(new RadialGradient(x[i], y[i], r[i],
+                            (alpha[i] << 24) | col, col & 0x00FFFFFF, Shader.TileMode.CLAMP));
+                    canvas.save();
+                    canvas.scale(1f, 0.38f, x[i], y[i]);
+                    canvas.drawCircle(x[i], y[i], r[i], paint);
+                    canvas.restore();
+                }
+                paint.setShader(null);
+                break;
+            case STARS:
+                paint.setShader(null);
+                paint.setStyle(Paint.Style.FILL);
+                for (int i = 0; i < count; i++) {
+                    phase[i] += dt * speed[i];
+                    int a = (int) (alpha[i] * (0.55f + 0.45f * Math.sin(phase[i])));
+                    paint.setColor((Math.max(0, a) << 24) | 0xFFFFFF);
+                    canvas.drawCircle(x[i], y[i], r[i], paint);
+                }
+                break;
+        }
+        if (!embedded) postInvalidateDelayed(33); // ~30 fps is smooth for weather and light on the TV
+    }
+}

@@ -103,6 +103,8 @@ final class Config {
     final String greetingName;
     /** Theme key paired_app: the app Home tells about focus and launches (Companion); empty is off. */
     String companionPackage = "";
+    /** Theme key live_scene: the wallpaper lit for the hour and the weather, with weather animated over it. */
+    boolean liveScene;
     final boolean moduleCards;
     /** Calmer motion for weak GPUs (config.xml, reduced_motion): stiff spring, short fades, no replay. */
     final boolean reducedMotion;
@@ -720,6 +722,8 @@ final class Config {
                 Math.max(0, Math.min(600, openOnStartNetworkWait)), openOnStartOnWake, iconOnlyVpn, clockFormat, backOpensClock, glowSnap);
         String companion = res.getString(R.string.paired_app).trim();
         cfg.companionPackage = json == null ? companion : string(json, "paired_app", companion);
+        boolean live = res.getBoolean(R.bool.live_scene);
+        cfg.liveScene = json == null ? live : bool(json, "live_scene", live);
         return cfg;
     }
 

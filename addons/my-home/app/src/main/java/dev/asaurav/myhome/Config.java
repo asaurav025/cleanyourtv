@@ -67,6 +67,9 @@ final class Config {
     LocalTime flatBy = LocalTime.of(15, 10);
     boolean bellPulse = true;
 
+    /** Where the weather and the sun are read for (Open-Meteo); NaN = no weather, the clock's sun times. */
+    double latitude = Double.NaN, longitude = Double.NaN;
+
     LocalDate diwaliFrom, diwaliTo;
     LocalTime diwaliEvening = LocalTime.of(17, 45);
     String diwaliEffect = "";
@@ -143,6 +146,14 @@ final class Config {
                         c.symbols.add(new Symbol(y, y.replace(".NS", "")));
                     }
                 }
+            }
+        }
+        JSONObject weather = o.optJSONObject("weather");
+        if (weather != null) {
+            double lat = weather.optDouble("latitude", Double.NaN), lon = weather.optDouble("longitude", Double.NaN);
+            if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+                c.latitude = lat;
+                c.longitude = lon;
             }
         }
         JSONObject diwali = o.optJSONObject("diwali");

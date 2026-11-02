@@ -66,6 +66,38 @@ final class Scene {
         return from != null && to != null && !d.isBefore(from) && !d.isAfter(to);
     }
 
+    /** Dawn and dusk are 45 minutes either side of sunrise and sunset (minutes after midnight), as in Lumen. */
+    static String phase(int now, int rise, int set) {
+        if (Math.abs(now - rise) <= 45) return "dawn";
+        if (Math.abs(now - set) <= 45) return "dusk";
+        return now > rise && now < set ? "day" : "night";
+    }
+
+    /** An Open-Meteo (WMO) weather code as the scene's weather word. */
+    static String weather(int code) {
+        if (code < 0) return "clear";
+        if (code == 0) return "clear";
+        if (code <= 2) return "partly";
+        if (code == 3) return "cloudy";
+        if (code == 45 || code == 48) return "fog";
+        if ((code >= 71 && code <= 77) || code == 85 || code == 86) return "snow";
+        if (code >= 95) return "storm";
+        if (code >= 51) return "rain";
+        return "cloudy";
+    }
+
+    /** "06:41" or "2026-11-03T06:41" to minutes after midnight; -1 when it is neither. */
+    static int minutes(String s) {
+        if (s == null) return -1;
+        int t = s.indexOf('T');
+        String hm = t >= 0 ? s.substring(t + 1) : s;
+        try {
+            return Integer.parseInt(hm.substring(0, 2)) * 60 + Integer.parseInt(hm.substring(3, 5));
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
     /** 0-100 percent to ESPHome's 0-255 brightness. */
     static int brightness(int percent) {
         return Math.round(Math.max(0, Math.min(100, percent)) * 2.55f);

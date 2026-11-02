@@ -13,7 +13,7 @@ import android.os.Process;
  *   focus  "#RRGGBB"   the focused tile's glow colour
  *   launch "<package>" Home opened an app
  *   home               Home came back to the front
- *   state              -> {"line": the market strip, "greeting": an override or ""}
+ *   state              -> {"line": the market strip, "greeting": an override or "", "scene": "dusk/rain"}
  * Only the launcher and the ADB shell (for testing with `content call`) may call it, so no other app can drive the
  * room's lights.
  */
@@ -47,6 +47,7 @@ public final class HomeProvider extends ContentProvider {
             case "state":
                 out.putString("line", room.line());
                 out.putString("greeting", room.greeting());
+                out.putString("scene", room.scene());
                 break;
             default:
                 return null;

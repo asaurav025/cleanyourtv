@@ -32,6 +32,7 @@ final class Companion {
     private static volatile int focusColor = 0;
     private static volatile String line = "";
     private static volatile String greeting = "";
+    private static volatile String scene = "";
 
     private Companion() {}
 
@@ -82,9 +83,11 @@ final class Companion {
             Bundle b = call(c, "state", null);
             String l = b == null ? "" : b.getString("line", "");
             String g = b == null ? "" : b.getString("greeting", "");
+            String s = b == null ? "" : b.getString("scene", "");
             main.post(() -> {
                 line = l == null ? "" : l;
                 greeting = g == null ? "" : g;
+                scene = s == null ? "" : s;
                 done.run();
             });
         });
@@ -92,6 +95,11 @@ final class Companion {
 
     static boolean hasLine() {
         return enabled() && !line.isEmpty();
+    }
+
+    /** "phase/weather" from the paired app, e.g. "dusk/rain", or empty. */
+    static String scene() {
+        return enabled() ? scene : "";
     }
 
     static String greeting() {

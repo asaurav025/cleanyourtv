@@ -102,6 +102,29 @@ public class LogicTest {
     }
 
     @Test
+    public void scene() {
+        assertEquals("dawn", Scene.phase(6 * 60 + 50, 6 * 60 + 41, 17 * 60 + 58));
+        assertEquals("day", Scene.phase(12 * 60, 6 * 60 + 41, 17 * 60 + 58));
+        assertEquals("dusk", Scene.phase(18 * 60 + 30, 6 * 60 + 41, 17 * 60 + 58));
+        assertEquals("night", Scene.phase(23 * 60, 6 * 60 + 41, 17 * 60 + 58));
+        assertEquals("rain", Scene.weather(61));
+        assertEquals("storm", Scene.weather(95));
+        assertEquals("fog", Scene.weather(45));
+        assertEquals("partly", Scene.weather(2));
+        assertEquals("clear", Scene.weather(-1));
+        assertEquals(6 * 60 + 41, Scene.minutes("2026-11-03T06:41"));
+        Weather.Report r = Weather.parse("{\"current\":{\"weather_code\":63},\"daily\":{\"sunrise\":[\"2026-11-03T06:41\"],"
+                + "\"sunset\":[\"2026-11-03T17:58\"]}}");
+        assertNotNull(r);
+        assertEquals(63, r.code);
+        assertEquals(17 * 60 + 58, r.sunset);
+        assertNull(Weather.parse("{}"));
+        Config c = Config.parse("{\"weather\":{\"latitude\":19.07,\"longitude\":72.88}}");
+        assertEquals(19.07, c.latitude, 1e-9);
+        assertTrue(Double.isNaN(Config.parse("{\"weather\":{\"latitude\":200}}").latitude));
+    }
+
+    @Test
     public void bellWindow() {
         assertTrue(Bell.justAfter(LocalTime.of(9, 24), Market.OPEN));
         assertTrue(Bell.justAfter(LocalTime.of(9, 14, 30), Market.OPEN));

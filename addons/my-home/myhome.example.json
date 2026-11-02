@@ -11,5 +11,6 @@
             "greeting": "Late night"},
   "market": {"enabled": true, "flat_by": "15:10", "bell_pulse": true,
              "symbols": [{"yahoo": "^NSEI", "label": "NIFTY"}, {"yahoo": "^NSEBANK", "label": "BANKNIFTY"}]},
+  "weather": {"latitude": 28.61, "longitude": 77.21},
   "diwali": {"from": "2026-11-06", "to": "2026-11-11", "evening": "17:45", "effect": "Random Levels"}
 }

@@ -217,6 +217,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private String greetingName = "";
     /** Optional time-of-day backdrop (config.xml, sky_intensity); 0 keeps it hidden. */
     private SkyView sky;
+    /** A theme's live_scene, or null. */
+    private LiveScene liveScene;
     private String vpnApp;
     /** vpn_pill: the VPN shown as its own pill (btnVpn) instead of a badge in the network pill. Off with top_menu. */
     private boolean vpnPill;
@@ -436,6 +438,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         @Override
         public void run() {
             updateGreeting();
+            if (liveScene != null) liveScene.set(Companion.scene());
             updatePanel();
             // The pill follows the network callbacks and each return to Home; only the festive light follows the
             // signal level, so only it needs this minute's binder calls (about 7 ms on the UI thread).
@@ -506,6 +509,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // the theme's background, so launch looks the same.
         getWindow().setBackgroundDrawable(null);
         wallpaperPlayer = new WallpaperPlayer(this, root, cfg);
+        liveScene = cfg.liveScene ? LiveScene.create(this, root, wallpaperPlayer.view(), cfg) : null;
+        if (liveScene != null) liveScene.set(null);
         sky = findViewById(R.id.sky);
         sky.setIntensity(cfg.skyIntensity);
         glass = findViewById(R.id.glass);
@@ -1131,6 +1136,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         if (showStats) startStats();
         startCompanion();
+        if (liveScene != null) liveScene.resume();
         if (gameDay != null) gameDay.start();
         sky.update();
         wallpaperPlayer.start();
@@ -2315,6 +2321,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (stats.getVisibility() != want) stats.setVisibility(want);
         }
         updateGreeting();
+        if (liveScene != null) liveScene.set(Companion.scene());
     }
 
     /** One quiet line, e.g. "CPU 8%  ·  Memory 430 MB free  ·  Storage 3.1 GB free". Runs off the main thread. */

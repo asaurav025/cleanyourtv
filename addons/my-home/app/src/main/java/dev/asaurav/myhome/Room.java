@@ -46,6 +46,10 @@ final class Room {
 
     private volatile String line = "";
     private long quotesAt;
+    private static final long WEATHER_TTL_MS = 20 * 60_000;
+    private volatile String scene = "";
+    private long weatherAt = -WEATHER_TTL_MS;
+    private int weatherCode = -1, sunrise = 6 * 60 + 30, sunset = 18 * 60;
 
     static synchronized Room get(Context c) {
         if (instance == null) instance = new Room(c.getApplicationContext());
@@ -127,8 +131,16 @@ final class Room {
 
     /** The cached line for Home; refreshes it in the background when it is stale. Never blocks. */
     String line() {
-        bg.post(() -> refreshLine(false));
+        bg.post(() -> {
+            refreshLine(false);
+            refreshScene();
+        });
         return line;
+    }
+
+    /** "phase/weather" for the launcher's live_scene; empty until the first refresh. */
+    String scene() {
+        return scene;
     }
 
     String greeting() {
@@ -181,6 +193,24 @@ final class Room {
         quotesAt = t;
         List<Market.Quote> q = phase == Market.Phase.PRE ? java.util.Collections.emptyList() : Quotes.fetch(cfg.symbols);
         line = Market.line(q, phase, cfg.flatBy);
+    }
+
+    /** The phase from today's sunrise and sunset, the weather from Open-Meteo every 20 minutes when a place is set. */
+    private void refreshScene() {
+        reload();
+        long t = SystemClock.uptimeMillis();
+        if (!Double.isNaN(cfg.latitude) && t - weatherAt >= WEATHER_TTL_MS) {
+            weatherAt = t;
+            Weather.Report r = Weather.fetch(cfg.latitude, cfg.longitude);
+            if (r != null) {
+                weatherCode = r.code;
+                if (r.sunrise >= 0) sunrise = r.sunrise;
+                if (r.sunset >= 0) sunset = r.sunset;
+            }
+        }
+        java.time.LocalTime now = ZonedDateTime.now(Market.IST).toLocalTime();
+        String w = Double.isNaN(cfg.latitude) ? "clear" : Scene.weather(weatherCode);
+        scene = Scene.phase(now.getHour() * 60 + now.getMinute(), sunrise, sunset) + "/" + w;
     }
 
     /** A strip counts as on when its light is on and, if it has one, its power switch too. Cached briefly. */
