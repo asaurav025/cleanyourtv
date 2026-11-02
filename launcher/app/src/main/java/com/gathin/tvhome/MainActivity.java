@@ -589,6 +589,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         lunarOffset = Lunar.offsetFor(cfg.lunarUtcOffset, Locale.getDefault());
         if (lunar) lunarDate.setVisibility(View.VISIBLE);
         greetingName = cfg.greetingName;
+        Companion.configure(cfg.companionPackage);
         if (cfg.dateBelowClock) moveDateBelowClock();
         if (cfg.dateBelowClock && cfg.iconOnlyButtons && !cfg.topMenu
                 && !getResources().getBoolean(R.bool.rtl_menu_bar)) {
@@ -1129,6 +1130,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             pillsShown = true;
         }
         if (showStats) startStats();
+        startCompanion();
         if (gameDay != null) gameDay.start();
         sky.update();
         wallpaperPlayer.start();
@@ -1314,6 +1316,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         handler.removeCallbacks(openWhenOnline);
         startPending = null;   // leaving Home before the network came back: the boot's app stays closed
         stopStats();
+        handler.removeCallbacks(companionTick);
         if (gameDay != null) gameDay.stop();
         handler.removeCallbacks(turnTick);
         if (lamp != null) lamp.stop();
@@ -1793,6 +1796,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     public void onTileFocused(int position, View card) {
+        if (Companion.enabled()) Companion.focus(this, adapter.ambientColorAt(position));
         lastFocused = position;
         lastFocusedKey = adapter.keyAt(position);
         // Focus restored before the first layout (cold start): the tile has no size yet, and the glass
@@ -2263,7 +2267,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 if (statsBg != bg) return;
                 String line = readStatsLine();
                 handler.post(() -> {
-                    if (showStats && stats != null && statsBg == bg) stats.setText(line);
+                    if (showStats && stats != null && statsBg == bg) stats.setText(Companion.styled(line));
                 });
                 if (statsBg == bg) bg.postDelayed(this, STATS_MS);
             }
@@ -2278,7 +2282,39 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         statsBg = null;
         // Paused (the quick panel or an app on top): keep the last line on screen. Taking it away moved the grid up
         // under a glass highlight that stayed put.
-        if (!showStats) stats.setVisibility(View.GONE);
+        if (!showStats && !Companion.hasLine()) stats.setVisibility(View.GONE);
+    }
+
+    // ---- optional companion app (a theme's paired_app) ---------------------------------------
+
+    private static final long COMPANION_MS = 30_000;
+
+    /** While Home is resumed: tell the companion Home is back, then ask for its line every 30 s. */
+    private void startCompanion() {
+        if (!Companion.enabled()) return;
+        Companion.home(this);
+        handler.removeCallbacks(companionTick);
+        handler.post(companionTick);
+    }
+
+    private final Runnable companionTick = new Runnable() {
+        @Override
+        public void run() {
+            if (!resumed || !Companion.enabled()) return;
+            Companion.refresh(MainActivity.this, MainActivity.this::applyCompanion);
+            handler.postDelayed(this, COMPANION_MS);
+        }
+    };
+
+    /** The line under the clock (after the stats when show_stats is on, which then sets it) and the greeting. */
+    private void applyCompanion() {
+        if (stats == null) return;
+        if (!showStats) {
+            stats.setText(Companion.styled(""));
+            int want = Companion.hasLine() ? View.VISIBLE : View.GONE;
+            if (stats.getVisibility() != want) stats.setVisibility(want);
+        }
+        updateGreeting();
     }
 
     /** One quiet line, e.g. "CPU 8%  ·  Memory 430 MB free  ·  Storage 3.1 GB free". Runs off the main thread. */
@@ -2747,6 +2783,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (!festiveGreeting.isEmpty()) {
             greeting.setText(festiveGreeting);
             greeting.setTextColor(liftTowardsWhite(festival.accentColor(), 0.25f));
+        } else if (!Companion.greeting().isEmpty()) {
+            greeting.setText(greetingName.isEmpty() ? Companion.greeting()
+                    : getString(R.string.greeting_with_name, Companion.greeting(), greetingName));
+            greeting.setTextColor(greetingColor);
         } else {
             greeting.setText(greetingName.isEmpty() ? getString(res)
                     : getString(R.string.greeting_with_name, getString(res), greetingName));
