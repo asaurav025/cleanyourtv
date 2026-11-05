@@ -1323,6 +1323,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         startPending = null;   // leaving Home before the network came back: the boot's app stays closed
         stopStats();
         handler.removeCallbacks(companionTick);
+        Companion.unwatchNote(this);
         if (gameDay != null) gameDay.stop();
         handler.removeCallbacks(turnTick);
         if (lamp != null) lamp.stop();
@@ -2294,6 +2295,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     // ---- optional companion app (a theme's paired_app) ---------------------------------------
 
     private static final long COMPANION_MS = 30_000;
+    private static final long NOTE_FADE_IN_MS = 1000;
+    private static final float NOTE_WIDTH = 0.34f, NOTE_TOP = 0.215f, NOTE_RIGHT = 0.058f;
+    private ImageView noteView;
+    private long noteShown;
+    private boolean noteFadingIn;
 
     /** While Home is resumed: tell the companion Home is back, then ask for its line every 30 s. */
     private void startCompanion() {
@@ -2301,6 +2307,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         Companion.home(this);
         handler.removeCallbacks(companionTick);
         handler.post(companionTick);
+        Companion.watchNote(this, () -> {
+            if (resumed) Companion.refresh(this, this::applyCompanion);
+        });
     }
 
     private final Runnable companionTick = new Runnable() {
@@ -2312,8 +2321,60 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     };
 
+    /** The scribble from the phone, with its fade; a new one fades in over a second. */
+    private void applyNote() {
+        long stamp = Companion.noteStamp();
+        if (stamp == 0) {
+            noteShown = 0;
+            if (noteView != null) {
+                noteView.animate().cancel();
+                noteView.setVisibility(View.GONE);
+                noteView.setImageDrawable(null);
+            }
+            return;
+        }
+        if (noteView == null) noteView = addNoteView();
+        if (stamp == noteShown) {
+            if (noteView.getAlpha() != Companion.noteAlpha() && !noteFadingIn) {
+                noteView.setAlpha(Companion.noteAlpha());
+            }
+            return;
+        }
+        noteShown = stamp;
+        noteView.animate().cancel();
+        noteView.setImageBitmap(Companion.noteBitmap());
+        noteView.setVisibility(View.VISIBLE);
+        noteView.setAlpha(0f);
+        noteFadingIn = true;
+        noteView.animate().alpha(Companion.noteAlpha()).setDuration(NOTE_FADE_IN_MS)
+                .withEndAction(() -> noteFadingIn = false).start();
+    }
+
+    /**
+     * Below the top-right buttons and above the dock's row, sized from the screen so it stays there at any density.
+     * Behind the grid, so a tile scrolled up to that height covers the note and never the other way round. It takes
+     * no focus: the remote never lands on it.
+     */
+    private ImageView addNoteView() {
+        ImageView v = new ImageView(this);
+        v.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        v.setFocusable(false);
+        v.setClickable(false);
+        v.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        android.util.DisplayMetrics screen = getResources().getDisplayMetrics();
+        int width = Math.round(screen.widthPixels * NOTE_WIDTH);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, width * 9 / 16, Gravity.TOP | Gravity.END);
+        lp.topMargin = Math.round(screen.heightPixels * NOTE_TOP);
+        lp.rightMargin = Math.round(screen.widthPixels * NOTE_RIGHT);
+        View content = findViewById(R.id.grid);
+        while (content.getParent() != root && content.getParent() instanceof View) content = (View) content.getParent();
+        root.addView(v, Math.max(0, root.indexOfChild(content)), lp);
+        return v;
+    }
+
     /** The line under the clock (after the stats when show_stats is on, which then sets it) and the greeting. */
     private void applyCompanion() {
+        applyNote();
         if (stats == null) return;
         if (!showStats) {
             stats.setText(Companion.styled(""));

@@ -2,6 +2,9 @@ package com.gathin.tvhome;
 
 import android.content.Context;
 import android.content.pm.ProviderInfo;
+import android.database.ContentObserver;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -33,6 +36,14 @@ final class Companion {
     private static volatile String line = "";
     private static volatile String greeting = "";
     private static volatile String scene = "";
+    /** The scribble from the phone: when it was sent (0: none), how far it has faded, and the picture. */
+    private static volatile long noteStamp;
+    private static volatile float noteAlpha;
+    private static volatile Bitmap noteBitmap;
+    /** Which note {@link #fetchNote} last read; only the companion thread touches it. */
+    private static long noteFetched;
+    private static final int NOTE_MAX_WIDTH = 1920, NOTE_MAX_HEIGHT = 1080;
+    private static ContentObserver noteObserver;
 
     private Companion() {}
 
@@ -46,6 +57,7 @@ final class Companion {
         if (pkg.isEmpty()) {
             line = "";
             greeting = "";
+            noteStamp = 0;
         }
     }
 
@@ -84,13 +96,90 @@ final class Companion {
             String l = b == null ? "" : b.getString("line", "");
             String g = b == null ? "" : b.getString("greeting", "");
             String s = b == null ? "" : b.getString("scene", "");
+            // A failed call leaves the note as it is: a companion restarting should not blink it away.
+            long stamp = b == null ? noteFetched : b.getLong("note_stamp", 0);
+            float alpha = b == null ? noteAlpha : b.getFloat("note_alpha", 0f);
+            boolean fetched = stamp == noteFetched || fetchNote(c, stamp);
             main.post(() -> {
                 line = l == null ? "" : l;
                 greeting = g == null ? "" : g;
                 scene = s == null ? "" : s;
+                if (fetched) {
+                    noteStamp = stamp;
+                    noteAlpha = alpha;
+                }
                 done.run();
             });
         });
+    }
+
+    /** Off the main thread. False when the picture could not be read; the next refresh tries again. */
+    private static boolean fetchNote(Context c, long stamp) {
+        if (stamp == 0) {
+            noteBitmap = null;
+            noteFetched = 0;
+            return true;
+        }
+        Bundle b = call(c, "note", null);
+        byte[] png = b == null ? null : b.getByteArray("png");
+        Bitmap picture = png == null ? null : decodeNote(png);
+        if (picture == null) return false;
+        noteBitmap = picture;
+        noteFetched = stamp;
+        return true;
+    }
+
+    /** Sized before it is decoded: the note can come from anyone on the home network. */
+    private static Bitmap decodeNote(byte[] png) {
+        try {
+            BitmapFactory.Options o = new BitmapFactory.Options();
+            o.inJustDecodeBounds = true;
+            BitmapFactory.decodeByteArray(png, 0, png.length, o);
+            if (o.outWidth < 1 || o.outHeight < 1 || o.outWidth > NOTE_MAX_WIDTH || o.outHeight > NOTE_MAX_HEIGHT) return null;
+            return BitmapFactory.decodeByteArray(png, 0, png.length);
+        } catch (RuntimeException | OutOfMemoryError e) {
+            return null;
+        }
+    }
+
+    static long noteStamp() {
+        return enabled() ? noteStamp : 0;
+    }
+
+    static float noteAlpha() {
+        return noteAlpha;
+    }
+
+    static Bitmap noteBitmap() {
+        return noteBitmap;
+    }
+
+    /** While Home is on screen, a new note shows as soon as it arrives instead of at the next refresh. */
+    static void watchNote(Context ctx, Runnable changed) {
+        unwatchNote(ctx);
+        String p = pkg;
+        if (p.isEmpty()) return;
+        String authority = p + ".home";
+        try {
+            ProviderInfo info = ctx.getPackageManager().resolveContentProvider(authority, 0);
+            if (info == null || !p.equals(info.packageName)) return;
+            ContentObserver o = new ContentObserver(main) {
+                @Override
+                public void onChange(boolean selfChange) {
+                    changed.run();
+                }
+            };
+            ctx.getContentResolver().registerContentObserver(Uri.parse("content://" + authority + "/note"), false, o);
+            noteObserver = o;
+        } catch (RuntimeException e) {
+            // Home still picks the note up at its next refresh
+        }
+    }
+
+    static void unwatchNote(Context ctx) {
+        if (noteObserver == null) return;
+        ctx.getContentResolver().unregisterContentObserver(noteObserver);
+        noteObserver = null;
     }
 
     static boolean hasLine() {

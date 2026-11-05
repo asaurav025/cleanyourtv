@@ -74,6 +74,9 @@ final class Config {
     LocalTime diwaliEvening = LocalTime.of(17, 45);
     String diwaliEffect = "";
 
+    /** Days until a scribble on Home fades away; 0 keeps it until it is replaced or cleared. */
+    int noteFadeDays = 15;
+
     static Config defaults() {
         Config c = new Config();
         Collections.addAll(c.movieApps, "com.netflix.ninja", "com.amazon.amazonvideo.livingroom",
@@ -129,6 +132,8 @@ final class Config {
             c.nightDim = pct(night, "fairy", c.nightDim);
             c.nightGreeting = night.optString("greeting", c.nightGreeting).trim();
         }
+        JSONObject note = o.optJSONObject("note");
+        if (note != null) c.noteFadeDays = note.optInt("fade_days", c.noteFadeDays);
         JSONObject market = o.optJSONObject("market");
         if (market != null) {
             c.market = market.optBoolean("enabled", c.market);

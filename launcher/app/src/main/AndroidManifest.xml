@@ -66,6 +66,8 @@
         <package android:name="com.tcl.settings" />
         <package android:name="com.amazon.tv.launcher" />
         <!-- Coocaa OS sources for the Inputs menu (coocaa_sources); see CoocaaSources. -->
+        <!-- The paired_app companion on the my-home branch: it has no tile for a launcher query to find it by. -->
+        <provider android:authorities="dev.asaurav.myhome.home" />
         <provider android:authorities="com.skyworth.tv.provider" />
         <provider android:authorities="com.skyworth.tv.sdk.provider" />
     </queries>

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0B0E14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Binge Box Note</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #0B0E14; color: #E8EBF0; overflow: hidden;
+    overscroll-behavior: none; font: 16px -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px 16px; }
+  h1 { font-size: 20px; font-weight: 500; margin: 0 0 12px; }
+  canvas { display: block; width: 100%; aspect-ratio: 16 / 9; background: #1B2233; border-radius: 12px;
+    border: 1px solid #39445A; touch-action: none; cursor: crosshair; }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  button { flex: 1; min-height: 48px; font: inherit; color: inherit; background: #1E232C; border: 1px solid #39445A;
+    border-radius: 10px; }
+  button[aria-pressed="true"] { border-color: #FFB347; color: #FFB347; }
+  button:disabled { opacity: .4; }
+  .swatch { display: flex; align-items: center; justify-content: center; }
+  .swatch i { width: 20px; height: 20px; border-radius: 50%; display: block; }
+  #send { width: 100%; margin-top: 12px; min-height: 54px; background: #FFB347; border-color: #FFB347; color: #1B1408;
+    font-weight: 600; }
+  #status { min-height: 24px; margin: 12px 0 0; text-align: center; color: #A6AFBD; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Binge Box</h1>
+  <canvas id="pad" width="960" height="540" aria-label="Drawing area"></canvas>
+  <div class="row">
+    <button class="swatch" data-color="#FFFFFF" aria-label="White"><i style="background:#FFFFFF"></i></button>
+    <button class="swatch" data-color="#FFB347" aria-label="Amber"><i style="background:#FFB347"></i></button>
+    <button data-width="14">Thin</button>
+    <button data-width="26">Thick</button>
+  </div>
+  <div class="row">
+    <button id="undo">Undo</button>
+    <button id="clear">Clear</button>
+  </div>
+  <button id="send">Send to TV</button>
+  <p id="status" role="status"></p>
+</main>
+<script>
+  // Thick strokes and a baked-in shadow: a finger's line is seen from the sofa, over a moving scene.
+  const pad = document.getElementById('pad'), ctx = pad.getContext('2d');
+  const send = document.getElementById('send'), status = document.getElementById('status');
+  const undo = document.getElementById('undo'), clear = document.getElementById('clear');
+  let strokes = [], current = null, color = '#FFFFFF', width = 14, busy = false;
+
+  function pick(attr, value) {
+    document.querySelectorAll('[' + attr + ']').forEach(b => b.setAttribute('aria-pressed', b.getAttribute(attr) === String(value)));
+  }
+  function refresh() {
+    undo.disabled = clear.disabled = strokes.length === 0;
+    send.textContent = strokes.length ? 'Send to TV' : 'Remove note from TV';
+    send.disabled = busy;
+  }
+  function paint(s) {
+    ctx.strokeStyle = ctx.fillStyle = s.color;
+    ctx.lineWidth = s.width;
+    ctx.beginPath();
+    ctx.moveTo(s.points[0][0], s.points[0][1]);
+    if (s.points.length === 1) {
+      ctx.arc(s.points[0][0], s.points[0][1], s.width / 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    for (let i = 1; i < s.points.length - 1; i++) {
+      const [x, y] = s.points[i], [nx, ny] = s.points[i + 1];
+      ctx.quadraticCurveTo(x, y, (x + nx) / 2, (y + ny) / 2);
+    }
+    const last = s.points[s.points.length - 1];
+    ctx.lineTo(last[0], last[1]);
+    ctx.stroke();
+  }
+  function redraw() {
+    ctx.clearRect(0, 0, pad.width, pad.height);
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(0,0,0,.7)';
+    ctx.shadowBlur = 8;
+    strokes.forEach(paint);
+    if (current) paint(current);
+  }
+  function at(e) {
+    const r = pad.getBoundingClientRect();
+    return [(e.clientX - r.left) * pad.width / r.width, (e.clientY - r.top) * pad.height / r.height];
+  }
+  pad.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    pad.setPointerCapture(e.pointerId);
+    current = {color, width, points: [at(e)], id: e.pointerId};
+    status.textContent = '';
+    redraw();
+  });
+  pad.addEventListener('pointermove', e => {
+    if (!current || e.pointerId !== current.id) return;
+    // Some browsers have no coalesced events, or an empty list of them.
+    const moves = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    (moves.length ? moves : [e]).forEach(c => current.points.push(at(c)));
+    redraw();
+  });
+  function end(e) {
+    if (!current || e.pointerId !== current.id) return;
+    strokes.push(current);
+    current = null;
+    redraw();
+    refresh();
+  }
+  pad.addEventListener('pointerup', end);
+  pad.addEventListener('pointercancel', end);
+
+  document.querySelectorAll('[data-color]').forEach(b => b.onclick = () => { color = b.dataset.color; pick('data-color', color); });
+  document.querySelectorAll('[data-width]').forEach(b => b.onclick = () => { width = Number(b.dataset.width); pick('data-width', width); });
+  undo.onclick = () => { strokes.pop(); redraw(); refresh(); };
+  clear.onclick = () => { strokes = []; status.textContent = ''; redraw(); refresh(); };
+
+  async function deliver() {
+    if (!strokes.length) {
+      return fetch('note', {method: 'DELETE'});
+    }
+    const png = await new Promise(done => pad.toBlob(done, 'image/png'));
+    return fetch('note', {method: 'POST', headers: {'Content-Type': 'image/png'}, body: png});
+  }
+  send.onclick = async () => {
+    const removing = !strokes.length;
+    busy = true;
+    refresh();
+    status.textContent = removing ? 'Removing…' : 'Sending…';
+    try {
+      const r = await deliver();
+      if (r.status === 413) status.textContent = 'That drawing is too detailed to send. Try fewer strokes.';
+      else if (!r.ok) status.textContent = "The TV didn't accept that. Try again.";
+      else status.textContent = removing ? 'Removed from the TV.' : 'On the TV now.';
+    } catch (e) {
+      status.textContent = "Can't reach the TV. Is it on, and are you on the home Wi-Fi?";
+    }
+    busy = false;
+    refresh();
+  };
+  pick('data-color', color);
+  pick('data-width', width);
+  redraw();
+  refresh();
+</script>
+</body>
+</html>

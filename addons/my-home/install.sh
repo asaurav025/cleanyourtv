@@ -26,6 +26,10 @@ OUT=$(tv 'pm install -r /data/local/tmp/my-home.apk; rm -f /data/local/tmp/my-ho
 echo "$OUT"
 case "$OUT" in *Success*) ;; *) echo "ERROR: pm install failed" >&2; exit 1 ;; esac
 
+# The note page has to answer from the background. Some firmware (TCL's TclAppBoot) refuses to start an app without
+# AUTO_START, and an app has to be exempt from battery optimisation to start its foreground service from the background.
+tv "cmd appops set $PKG AUTO_START allow 2>/dev/null; cmd deviceidle whitelist +$PKG >/dev/null 2>&1; true" >/dev/null
+
 if [ -n "$CONFIG" ]; then
   # Start the app once so Android creates its files directory with the right owner, then copy the file in.
   tv "am start -n $PKG/.LightsActivity >/dev/null; sleep 2; input keyevent BACK" >/dev/null

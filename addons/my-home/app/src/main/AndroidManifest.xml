@@ -6,6 +6,9 @@
 
     <!-- The ESPHome boards on the home network, and Yahoo's delayed quotes for the market strip. Nothing else. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Keeps the note page answering: Android freezes a cached app (NoteService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="false"
@@ -18,17 +21,7 @@
         <activity
             android:name=".LightsActivity"
             android:exported="true"
-            android:launchMode="singleTask">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="com.gathin.tvhome.category.DOCK_CARD" />
-            </intent-filter>
-            <meta-data android:name="com.gathin.tvhome.card" android:resource="@xml/module_card" />
-        </activity>
+            android:launchMode="singleTask" />
 
         <!-- Home's events in, the market line out. HomeProvider itself lets only the launcher and the ADB shell in. -->
         <provider
@@ -37,5 +30,14 @@
             android:exported="true" />
 
         <receiver android:name=".Bell" android:exported="false" />
+
+        <service
+            android:name=".NoteService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Serves the home-network page that sends a note to the TV" />
+        </service>
     </application>
 </manifest>
